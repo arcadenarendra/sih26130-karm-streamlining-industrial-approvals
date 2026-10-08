@@ -12,7 +12,7 @@ import {
 } from "@/components/karm/widgets";
 import { StatusBadge, SLAClock } from "@/components/karm/status";
 import { Button } from "@/components/ui/button";
-import { api, assetUrl, errorMessage, USING_MOCK } from "@/api/client";
+import { api, errorMessage, openDocumentBlob } from "@/api/client";
 import type { ApprovalItem, Decision, RiskBrief } from "@/api/types";
 import { formatDateTime, isPending, slaInfo, typeOf, typeName, userName } from "@/api/utils";
 
@@ -82,19 +82,28 @@ function ItemReview({ appId, item }: { appId: string; item: ApprovalItem }) {
   const [briefLoading, setBriefLoading] = useState(false);
   const [modal, setModal] = useState<Decision | null>(null);
   const [busy, setBusy] = useState(false);
-  const [previewFailed, setPreviewFailed] = useState(false);
+  const [openingDocument, setOpeningDocument] = useState(false);
   const doc = item.documents[docIdx];
   const label = (dt: string) => t?.requiredDocuments.find((r) => r.docType === dt)?.label ?? dt;
-  const documentUrl = doc ? assetUrl(doc.fileUrl) : "";
-  const isImage = /\.(png|jpe?g|gif|webp)$/i.test(doc?.fileUrl ?? "");
-  const isBrowserPreview =
-    !!doc &&
-    !doc.fileUrl.startsWith("sample://") &&
-    (!USING_MOCK || doc.fileUrl.startsWith("blob:"));
-
-  useEffect(() => {
-    setPreviewFailed(false);
-  }, [doc?.fileUrl]);
+  const openDocument = async () => {
+    if (!doc) return;
+    const tab = window.open("", "_blank", "noopener,noreferrer");
+    if (!tab) {
+      toast.error("Allow pop-ups to open the document in a new tab");
+      return;
+    }
+    setOpeningDocument(true);
+    try {
+      const blobUrl = await openDocumentBlob(doc.fileUrl);
+      tab.location.href = blobUrl;
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (x) {
+      tab.close();
+      toast.error(errorMessage(x));
+    } finally {
+      setOpeningDocument(false);
+    }
+  };
 
   const loadBrief = async () => {
     setBriefLoading(true);
@@ -167,35 +176,17 @@ function ItemReview({ appId, item }: { appId: string; item: ApprovalItem }) {
                 ))}
               </ul>
               {doc && (
-                <div className="min-h-72 rounded-md border border-border bg-muted p-3">
-                  {!previewFailed && isImage ? (
-                    <img
-                      src={documentUrl}
-                      alt={label(doc.docType)}
-                      className="max-h-96 w-full rounded bg-surface object-contain"
-                      onError={() => setPreviewFailed(true)}
-                    />
-                  ) : !previewFailed && isBrowserPreview ? (
-                    <iframe
-                      src={documentUrl}
-                      title={label(doc.docType)}
-                      className="h-96 w-full rounded bg-surface"
-                      onError={() => setPreviewFailed(true)}
-                    />
-                  ) : (
-                    <div className="flex h-72 flex-col items-center justify-center text-center text-sm text-muted-foreground">
-                      <p className="font-medium text-foreground">{label(doc.docType)}</p>
-                      <a
-                        href={documentUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 text-primary underline"
-                      >
-                        Open uploaded document
-                      </a>
-                      <p className="mt-1 text-xs">Uploaded {formatDateTime(doc.uploadedAt)}</p>
-                    </div>
-                  )}
+                <div className="flex min-h-72 flex-col items-center justify-center rounded-md border border-border bg-muted p-6 text-center">
+                  <DocRow doc={doc} label={label(doc.docType)} />
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    {doc.originalName ?? label(doc.docType)}
+                  </p>
+                  <Button className="mt-4" onClick={openDocument} disabled={openingDocument}>
+                    {openingDocument ? "Opening document…" : "Open document in new tab"}
+                  </Button>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Uploaded {formatDateTime(doc.uploadedAt)}
+                  </p>
                   {doc.preValidationNotes.length > 0 && (
                     <ul className="mt-3 list-disc pl-5 text-sm" style={{ color: "var(--danger)" }}>
                       {doc.preValidationNotes.map((n) => (

@@ -29,6 +29,17 @@ export const assetUrl = (fileUrl: string) =>
   fileUrl.startsWith("data:")
     ? fileUrl
     : `${ASSET_BASE}${fileUrl.startsWith("/") ? fileUrl : `/${fileUrl}`}`;
+export async function openDocumentBlob(fileUrl: string): Promise<string> {
+  const token = tokenStore.get();
+  const res = await fetch(assetUrl(fileUrl), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, data.message ?? res.statusText, data.errors ?? []);
+  }
+  return URL.createObjectURL(await res.blob());
+}
 const TOKEN_KEY = "karm_token";
 
 export const tokenStore = {

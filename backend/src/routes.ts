@@ -96,6 +96,12 @@ const profileBody = z.object({
   location: z.object({ state: z.string(), district: z.string() }),
   projectSize: z.string(),
   stage: z.string(),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^\+?[0-9][0-9\s()-]{7,19}$/, "Enter a valid mobile number")
+    .nullable()
+    .optional(),
 });
 router.post(
   "/profile",
@@ -104,31 +110,45 @@ router.post(
   asyncHandler(async (req, res) => {
     if (await BusinessProfile.exists({ userId: req.user!.id }))
       throw new HttpError(409, "Profile already exists");
-    ok(
-      res,
-      {
-        profile: await BusinessProfile.create({
-          userId: req.user!.id,
-          ...profileBody.parse(req.body),
-        }),
-      },
-      201,
+    const body = profileBody.parse(req.body);
+    const profile = await BusinessProfile.create({
+      userId: req.user!.id,
+      businessName: body.businessName,
+      sector: body.sector,
+      location: body.location,
+      projectSize: body.projectSize,
+      stage: body.stage,
+    });
+    const user = await User.findByIdAndUpdate(
+      req.user!.id,
+      { phone: body.phone ?? null },
+      { new: true, runValidators: true },
     );
+    ok(res, { profile, user: clean(user) }, 201);
   }),
 );
 router.patch(
   "/profile",
   protect,
   roles("applicant"),
-  asyncHandler(async (req, res) =>
-    ok(res, {
-      profile: await BusinessProfile.findOneAndUpdate(
-        { userId: req.user!.id },
-        profileBody.partial().parse(req.body),
-        { new: true, runValidators: true },
-      ),
-    }),
-  ),
+  asyncHandler(async (req, res) => {
+    const body = profileBody.partial().parse(req.body);
+    const { phone, ...profileFields } = body;
+    const profile = await BusinessProfile.findOneAndUpdate(
+      { userId: req.user!.id },
+      profileFields,
+      { new: true, runValidators: true },
+    );
+    const user =
+      phone === undefined
+        ? await User.findById(req.user!.id)
+        : await User.findByIdAndUpdate(
+            req.user!.id,
+            { phone: phone ?? null },
+            { new: true, runValidators: true },
+          );
+    ok(res, { profile, user: clean(user) });
+  }),
 );
 router.get(
   "/checklist",
@@ -524,7 +544,7 @@ router.post(
 router.get(
   "/applications/:id/items/:itemId/documents/:docType/file",
   protect,
-  roles("applicant", "authority", "admin", "super_admin"),
+  roles("applicant", "authority", "department_admin", "admin", "super_admin"),
   asyncHandler(async (req, res) => {
     const a: any =
       req.user!.role === "applicant"

@@ -247,6 +247,8 @@ export const mock = {
       updatedAt: now(),
     };
     d.profiles.push(p);
+    u.phone = (body as BusinessProfile & { phone?: string | null }).phone ?? null;
+    u.updatedAt = now();
     save();
     return { profile: p };
   },
@@ -259,6 +261,10 @@ export const mock = {
     const errors = validateProfile({ ...p, ...body });
     if (errors.length) throw new ApiError(400, "Validation failed", errors);
     Object.assign(p, body, { updatedAt: now() });
+    if (Object.prototype.hasOwnProperty.call(body, "phone")) {
+      u.phone = (body as BusinessProfile & { phone?: string | null }).phone ?? null;
+      u.updatedAt = now();
+    }
     save();
     return { profile: p };
   },

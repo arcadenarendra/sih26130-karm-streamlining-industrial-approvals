@@ -8,6 +8,7 @@ import { Field, inputCls } from "@/components/karm/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { api, ApiError, errorMessage, fieldErrors } from "@/api/client";
 import { PROJECT_SIZES, SECTORS, STAGES, STATES } from "@/api/fixtures";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/app/profile")({
   ssr: false,
@@ -32,9 +33,18 @@ export const Route = createFileRoute("/app/profile")({
   ),
 });
 
-const empty = { businessName: "", sector: "", state: "", district: "", projectSize: "", stage: "" };
+const empty = {
+  businessName: "",
+  sector: "",
+  state: "",
+  district: "",
+  projectSize: "",
+  stage: "",
+  phone: "",
+};
 
 function Profile() {
+  const { user, refresh } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const q = useQuery({ queryKey: ["profile"], queryFn: api.profile.get, retry: false });
@@ -52,8 +62,9 @@ function Profile() {
         district: p.location.district,
         projectSize: p.projectSize,
         stage: p.stage,
+        phone: user?.phone ?? "",
       });
-  }, [q.data]);
+  }, [q.data, user?.phone]);
   if (q.isLoading) return <LoadingBlock rows={6} />;
   if (q.isError && !missing) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
 
@@ -67,9 +78,11 @@ function Profile() {
       location: { state: f.state, district: f.district },
       projectSize: f.projectSize,
       stage: f.stage,
+      phone: f.phone.trim() || null,
     };
     try {
       missing ? await api.profile.create(body) : await api.profile.update(body);
+      await refresh();
       toast.success("Profile saved");
       qc.invalidateQueries({ queryKey: ["profile"] });
       qc.invalidateQueries({ queryKey: ["checklist"] });
@@ -145,6 +158,19 @@ function Profile() {
           </Field>
           <Field id="stage" label="Stage" {...err("stage")}>
             {select("stage", "stage", STAGES)}
+          </Field>
+          <Field id="phone" label="Mobile number" hint="Include country code if needed" {...err("phone")}>
+            <input
+              id="phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="+91 98765 43210"
+              className={inputCls}
+              value={f.phone}
+              {...aria("phone")}
+              onChange={(e) => setF({ ...f, phone: e.target.value })}
+            />
           </Field>
           <div className="sm:col-span-2">
             <Button type="submit" disabled={busy}>

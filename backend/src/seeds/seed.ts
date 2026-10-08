@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { connectDb } from "../config/db.js";
 import { ApprovalType } from "../models/ApprovalType.js";
 import { Application } from "../models/Application.js";
@@ -8,6 +10,7 @@ import { User } from "../models/User.js";
 import { hashPassword } from "../utils/auth.js";
 import { Department } from "../models/Department.js";
 import { DepartmentAuthority } from "../models/DepartmentAuthority.js";
+import { env } from "../config/env.js";
 
 const demoPassword = "DemoPassword123!";
 
@@ -305,6 +308,39 @@ await Application.deleteMany({
 
 const now = new Date();
 const submittedAt = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+const demoFile = (name: string) => {
+  const storagePath = path.join(env.uploadDir, name);
+  if (!fs.existsSync(storagePath)) {
+    const pdf = [
+      "%PDF-1.4",
+      "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj",
+      "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj",
+      "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<<>>>>endobj",
+      "4 0 obj<</Length 44>>stream",
+      "BT /F1 18 Tf 72 720 Td (KARM demo document) Tj ET",
+      "endstream endobj",
+      "xref 0 5",
+      "0000000000 65535 f ",
+      "0000000009 00000 n ",
+      "0000000058 00000 n ",
+      "0000000115 00000 n ",
+      "0000000241 00000 n ",
+      "trailer<</Size 5/Root 1 0 R>>",
+      "startxref 335",
+      "%%EOF",
+    ].join("\n");
+    fs.mkdirSync(env.uploadDir, { recursive: true });
+    fs.writeFileSync(storagePath, pdf);
+  }
+  return storagePath;
+};
+const demoDocuments = {
+  identity: demoFile("demo-identity.pdf"),
+  registration: demoFile("demo-registration.pdf"),
+  registrationApproved: demoFile("demo-registration-approved.pdf"),
+  businessPlan: demoFile("demo-business-plan.pdf"),
+  sitePlan: demoFile("demo-site-plan.pdf"),
+};
 
 const draftApplication = await Application.create({
   referenceNumber: "KRM-SEED-DRAFT",
@@ -342,6 +378,9 @@ const submittedApplication = await Application.create({
         {
           docType: "identity",
           fileUrl: "/uploads/demo-identity.pdf",
+          storagePath: demoDocuments.identity,
+          originalName: "demo-identity.pdf",
+          mimeType: "application/pdf",
           uploadedAt: submittedAt,
           preValidationStatus: "passed",
           preValidationNotes: [],
@@ -382,6 +421,9 @@ const queryRaisedApplication = await Application.create({
         {
           docType: "registration",
           fileUrl: "/uploads/demo-registration.pdf",
+          storagePath: demoDocuments.registration,
+          originalName: "demo-registration.pdf",
+          mimeType: "application/pdf",
           uploadedAt: submittedAt,
           preValidationStatus: "passed",
           preValidationNotes: [],
@@ -429,6 +471,9 @@ const completedApplication = await Application.create({
         {
           docType: "registration",
           fileUrl: "/uploads/demo-registration-approved.pdf",
+          storagePath: demoDocuments.registrationApproved,
+          originalName: "demo-registration-approved.pdf",
+          mimeType: "application/pdf",
           uploadedAt: submittedAt,
           preValidationStatus: "passed",
           preValidationNotes: [],
@@ -472,6 +517,9 @@ const completedApplication = await Application.create({
         {
           docType: "business_plan",
           fileUrl: "/uploads/demo-business-plan.pdf",
+          storagePath: demoDocuments.businessPlan,
+          originalName: "demo-business-plan.pdf",
+          mimeType: "application/pdf",
           uploadedAt: submittedAt,
           preValidationStatus: "failed",
           preValidationNotes: ["Document is missing projected revenue details."],
@@ -509,6 +557,9 @@ const completedApplication = await Application.create({
         {
           docType: "site_plan",
           fileUrl: "/uploads/demo-site-plan.pdf",
+          storagePath: demoDocuments.sitePlan,
+          originalName: "demo-site-plan.pdf",
+          mimeType: "application/pdf",
           uploadedAt: now,
           preValidationStatus: "pending",
           preValidationNotes: ["Awaiting manual review."],
